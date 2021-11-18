@@ -1,4 +1,4 @@
-# hls4ml on AWS FPGA Developer AMI v1.8.x (HLS C/C++ Kernel)
+# hls4ml on Alveo U250 (HLS C/C++ Kernel)
 
 Setup tools, licenses, check connection to FPGA card
 
