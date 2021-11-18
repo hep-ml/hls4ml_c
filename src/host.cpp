@@ -43,11 +43,18 @@ typedef std::chrono::system_clock SClock;
 #include <vector>
 #include "kernel_params.h"
 
+#include "weights/w27.h"
+#include "weights/w31.h"
+#include "weights/w36.h"
+#include "weights/w40.h"
+#include "weights/w44.h"
+#include "weights/w48.h"
+
 #include <thread>
 #include <sstream>
 
-#define NUM_CU 4
-#define NBUFFER 8
+#define NBUFFER 1
+#define NUM_CU 1
 
 #define STRINGIFY2(var) #var
 #define STRINGIFY(var) STRINGIFY2(var)
@@ -179,6 +186,12 @@ class fpgaObj {
     int ikern;
     std::vector<bigdata_t,aligned_allocator<bigdata_t>> source_in;
     std::vector<bigdata_t,aligned_allocator<bigdata_t>> source_hw_results;
+    std::vector<model_default_t,aligned_allocator<model_default_t>> source_w27_in;
+    std::vector<model_default_t,aligned_allocator<model_default_t>> source_w31_in;
+    std::vector<model_default_t,aligned_allocator<model_default_t>> source_w36_in;
+    std::vector<model_default_t,aligned_allocator<model_default_t>> source_w40_in;
+    std::vector<model_default_t,aligned_allocator<model_default_t>> source_w44_in;
+    std::vector<model_default_t,aligned_allocator<model_default_t>> source_w48_in;
     cl::Program program;
     std::vector<cl::CommandQueue> q;
     std::vector<cl::Kernel> krnl_xil;
@@ -187,6 +200,7 @@ class fpgaObj {
     std::vector<std::vector<cl::Event>>   readList;
     std::vector<cl::Buffer> buffer_in;
     std::vector<cl::Buffer> buffer_out;
+    std::vector<cl::Buffer> buffer_wvec_in;
     std::vector<cl::Event>   write_event;
     std::vector<cl::Event>   kern_event;
     //std::vector<cl::Event>   read_event;
@@ -226,24 +240,13 @@ class fpgaObj {
         auto t2 = Clock::now();
         auto t3 = Clock::now();
         std::stringstream ss;
-        unsigned int lFVals[16*STREAMSIZE];
-        for (unsigned int j = 0; j < 16*STREAMSIZE; j++) {
-            lFVals[j] = rand();
-        }
-    
         for (int i = 0 ; i < nevents ; i++){
             t0 = Clock::now();
-            //int ikern = i%NUM_CU;
             auto ikf = get_info_lock();
             int ikb = ikf.first;
             int ik = ikb%NUM_CU;
             bool firstRun = ikf.second;
-            //for (int istream = 0; istream < COMPSTREAMSIZE; istream++) {
-            //    source_hw_results[(ikern)*COMPSTREAMSIZE+istream/COMPRESSION] = 0;
-            //}
 
-            memcpy(source_in.data()+ikb*STREAMSIZE, &lFVals[0], STREAMSIZE*sizeof(bigdata_t));
-    
             t1 = Clock::now();
             auto ts1 = SClock::now();
             print_nanoseconds("        start:  ",ts1, ik, ss);
@@ -256,12 +259,10 @@ class fpgaObj {
             }
             OCL_CHECK(err,
                       err =
-                          q[ik].enqueueMigrateMemObjects({buffer_in[ikb]},
+		      q[ik].enqueueMigrateMemObjects({buffer_in[ikb],buffer_wvec_in[0],buffer_wvec_in[1],buffer_wvec_in[2],buffer_wvec_in[3],buffer_wvec_in[4],buffer_wvec_in[5]},
                                                      0 /* 0 means from host*/,
                                                      NULL,
                                                      &(write_event[ikb])));
-            //set_callback(write_event[ikb], queuename.c_str());
-    
             t1a = Clock::now();
             writeList[ikb].clear();
             writeList[ikb].push_back(write_event[ikb]);
@@ -269,7 +270,6 @@ class fpgaObj {
             OCL_CHECK(err,
                       err = q[ik].enqueueNDRangeKernel(
                           krnl_xil[ikb], 0, 1, 1, &(writeList[ikb]), &(kern_event[ikb])));
-            //set_callback(kern_event[ikb], queuename.c_str());
             t1b = Clock::now();
             kernList[ikb].clear();
             kernList[ikb].push_back(kern_event[ikb]);
@@ -280,7 +280,6 @@ class fpgaObj {
                                                        &(kernList[ikb]),
                                                        &(read_event)));
 
-            //set_callback(read_event, queuename.c_str());
             release_ilock(ikb);
         
             OCL_CHECK(err, err = kern_event[ikb].wait());
@@ -288,29 +287,13 @@ class fpgaObj {
             auto ts2 = SClock::now();
             print_nanoseconds("       finish:  ",ts2, ik, ss);
             t2 = Clock::now();
-    
-            /*if (valid_data && !hit_end) {
-                std::cout<<"Predictions: \n";
-                for (int j = 0 ; j < STREAMSIZE ; j++){
-                    for (int k = 0 ; k < DATA_SIZE_OUT ; k++){
-            	        std::cout << pr[j*DATA_SIZE_OUT + k] << " \t";
-                    }
-                }
-                std::cout << std::endl;
-            }*/
-            //std::cout<<"Quantized predictions: \n";
-            //for (int j = 0 ; j < COMPSTREAMSIZE ; j++){
-            //    std::cout << source_hw_results[(ik)*COMPSTREAMSIZE+j] << " ";
-            //}
-            //std::cout << std::endl;
-            t3 = Clock::now();
-            //std::cout << " Prep time: " << std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count() << " ns" << std::endl;
-            //std::cout << " FPGA time: " << std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() << " ns" << std::endl;
-            //std::cout << "    inputs: " << std::chrono::duration_cast<std::chrono::nanoseconds>(t1a - t1).count() << " ns" << std::endl;
-            //std::cout << "    kernel: " << std::chrono::duration_cast<std::chrono::nanoseconds>(t1b - t1a).count() << " ns" << std::endl;
-            //std::cout << "   outputs: " << std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1b).count() << " ns" << std::endl;
+	    t3 = Clock::now();
+            std::cout << " Prep time: " << std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count() << " ns" << std::endl;
+            std::cout << " FPGA time: " << std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() << " ns" << std::endl;
+            std::cout << "    inputs: " << std::chrono::duration_cast<std::chrono::nanoseconds>(t1a - t1).count() << " ns" << std::endl;
+            std::cout << "    kernel: " << std::chrono::duration_cast<std::chrono::nanoseconds>(t1b - t1a).count() << " ns" << std::endl;
+            std::cout << "   outputs: " << std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1b).count() << " ns" << std::endl;
             ss << "KERN"<<ik<<"   Total time: " << std::chrono::duration_cast<std::chrono::nanoseconds>(t3 - t0).count() << " ns\n";
-            //std::cout<<"---- END EVENT "<<i+1<<" ----"<<std::endl;
         }
         return ss;
     }
@@ -318,10 +301,6 @@ class fpgaObj {
   private:
     mutable std::mutex mtx;
     mutable std::mutex mtxi[NUM_CU*NBUFFER];
-    //mutable std::mutex mtx0;
-    //mutable std::mutex mtx1;
-    //mutable std::mutex mtx2;
-    //mutable std::mutex mtx3;
     mutable std::mutex smtx;
 };
 
@@ -342,37 +321,57 @@ int main(int argc, char** argv)
     if (argc > 3) datadir = argv[3];
     std::cout << "Will run " << nevents << " time(s), using " << datadir << " to get input features and output predictions (tb_input_features.dat and tb_output_predictions.dat)" << std::endl;
 
-    size_t vector_size_in_bytes = sizeof(bigdata_t) * STREAMSIZE;
-    size_t vector_size_out_bytes = sizeof(bigdata_t) * COMPSTREAMSIZE;
-    // Allocate Memory in Host Memory
-    // When creating a buffer with user pointer (CL_MEM_USE_HOST_PTR), under the hood user ptr 
-    // is used if it is properly aligned. when not aligned, runtime had no choice but to create
-    // its own host side buffer. So it is recommended to use this allocator if user wish to
-    // create buffer using CL_MEM_USE_HOST_PTR to align user buffer to page boundary. It will 
-    // ensure that user buffer is used when user create Buffer/Mem object with CL_MEM_USE_HOST_PTR 
-    //std::vector<bigdata_t,aligned_allocator<bigdata_t>> source_in(STREAMSIZE*NUM_CU);
-    //std::vector<bigdata_t,aligned_allocator<bigdata_t>> source_hw_results(COMPSTREAMSIZE*NUM_CU);
+    size_t vector_size_in_bytes = sizeof(bigdata_t) * STREAMSIZE * BIGSTREAMSIZE_IN;
+    size_t vector_size_out_bytes = sizeof(bigdata_t) * STREAMSIZE * BIGSTREAMSIZE_OUT;
+    size_t vector_size_in_w27_bytes = sizeof(model_default_t) * NW1;
+    size_t vector_size_in_w31_bytes = sizeof(model_default_t) * NW2;
+    size_t vector_size_in_w36_bytes = sizeof(model_default_t) * NW3;
+    size_t vector_size_in_w40_bytes = sizeof(model_default_t) * NW4;
+    size_t vector_size_in_w44_bytes = sizeof(model_default_t) * NW5;
+    size_t vector_size_in_w48_bytes = sizeof(model_default_t) * NW6;
     fpgaObj fpga;
     fpga.nevents = nevents;
     fpga.ikern = 0;
-    fpga.source_in.reserve(STREAMSIZE*NUM_CU*NBUFFER);
-    fpga.source_hw_results.reserve(COMPSTREAMSIZE*NUM_CU*NBUFFER);
-    
+    fpga.source_in.reserve(STREAMSIZE*BIGSTREAMSIZE_IN*NUM_CU*NBUFFER);
+    fpga.source_hw_results.reserve(STREAMSIZE*BIGSTREAMSIZE_OUT*NUM_CU*NBUFFER);
+    //fpga.source_w8_in.reserve(NW1);
+    //fpga.source_w10_in.reserve(NW2);
+    fpga.source_w40_in.reserve(NW3);
+    fpga.source_w44_in.reserve(NW4);
 
     //initialize
-    for(int j = 0 ; j < STREAMSIZE*NUM_CU*NBUFFER ; j++){
-        fpga.source_in[j] = 0;
+    for(int j = 0 ; j < STREAMSIZE*BIGSTREAMSIZE_IN*NUM_CU*NBUFFER ; j++){
+      if(j != 0) fpga.source_in[j] = 1;
+      if(j == 0) fpga.source_in[j] = 1;
     }
-    for(int j = 0 ; j < COMPSTREAMSIZE*NUM_CU*NBUFFER ; j++){
-        fpga.source_hw_results[j] = 0;
+    for(int j = 0 ; j < STREAMSIZE*BIGSTREAMSIZE_OUT*NUM_CU*NBUFFER ; j++){
+      data_t in=(data_t) j;
+      fpga.source_hw_results[j] = in;
+    }
+    for(int j = 0; j < NW1; j++){
+      fpga.source_w27_in[j] = w27[j];
+    }
+    for(int j = 0; j < NW2; j++){
+      fpga.source_w31_in[j] = w31[j];
+    }
+    for(int j = 0; j < NW3; j++){
+      fpga.source_w36_in[j] = w36[j];
+    }
+    for(int j = 0; j < NW4; j++){
+      fpga.source_w40_in[j] = w40[j];
+    }
+    for(int j = 0; j < NW5; j++){
+      fpga.source_w44_in[j] = w44[j];
+    }
+    for(int j = 0; j < NW6; j++){
+      fpga.source_w48_in[j] = w48[j];
     }
 
-// OPENCL HOST CODE AREA START
+    // OPENCL HOST CODE AREA START
     // get_xil_devices() is a utility API which will find the xilinx
     // platforms and will return list of devices connected to Xilinx platform
     std::vector<cl::Device> devices = xcl::get_xil_devices();
     cl::Device device = devices[0];
-
     cl::Context context(device);
     for (int i = 0; i < NUM_CU; i++) {
         cl::CommandQueue q_tmp(context, device, CL_QUEUE_PROFILING_ENABLE | CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE);
@@ -400,7 +399,7 @@ int main(int argc, char** argv)
 
     for (int ib = 0; ib < NBUFFER; ib++) {
         for (int i = 0; i < NUM_CU; i++) {
-            std::string cu_id = std::to_string(i);
+            std::string cu_id = std::to_string(NUM_CU>1 ? i : 1);
             std::string krnl_name_full =
                 "alveo_hls4ml:{alveo_hls4ml_" + cu_id + "}";
             printf("Creating a kernel [%s] for CU(%d)\n",
@@ -413,53 +412,86 @@ int main(int argc, char** argv)
             fpga.krnl_xil.push_back(krnl_tmp);
         }
     }
-
     // Allocate Buffer in Global Memory
     // Buffers are allocated using CL_MEM_USE_HOST_PTR for efficient memory and 
     // Device-to-host communication
+
+    cl::Buffer buffer_in_w27_tmp    (context,CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,   vector_size_in_w27_bytes, fpga.source_w27_in.data());
+    cl::Buffer buffer_in_w31_tmp    (context,CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,   vector_size_in_w31_bytes, fpga.source_w31_in.data());
+    cl::Buffer buffer_in_w36_tmp    (context,CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,   vector_size_in_w36_bytes, fpga.source_w36_in.data());
+    cl::Buffer buffer_in_w40_tmp    (context,CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,   vector_size_in_w40_bytes, fpga.source_w40_in.data());
+    cl::Buffer buffer_in_w44_tmp    (context,CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,   vector_size_in_w44_bytes, fpga.source_w44_in.data());
+    cl::Buffer buffer_in_w48_tmp    (context,CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,   vector_size_in_w48_bytes, fpga.source_w48_in.data());
+    fpga.buffer_wvec_in.push_back(buffer_in_w27_tmp);
+    fpga.buffer_wvec_in.push_back(buffer_in_w31_tmp);
+    fpga.buffer_wvec_in.push_back(buffer_in_w36_tmp);
+    fpga.buffer_wvec_in.push_back(buffer_in_w40_tmp);
+    fpga.buffer_wvec_in.push_back(buffer_in_w44_tmp);
+    fpga.buffer_wvec_in.push_back(buffer_in_w48_tmp);
     
     fpga.writeList.reserve(NUM_CU*NBUFFER);
     fpga.kernList.reserve(NUM_CU*NBUFFER);
     fpga.readList.reserve(NUM_CU*NBUFFER);
     for (int ib = 0; ib < NBUFFER; ib++) {
         for (int ik = 0; ik < NUM_CU; ik++) {
-            cl::Buffer buffer_in_tmp    (context,CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,   vector_size_in_bytes, fpga.source_in.data()+((ib*NUM_CU+ik) * STREAMSIZE));
-            cl::Buffer buffer_out_tmp(context,CL_MEM_USE_HOST_PTR | CL_MEM_WRITE_ONLY, vector_size_out_bytes, fpga.source_hw_results.data()+((ib*NUM_CU+ik) * COMPSTREAMSIZE));
-            fpga.buffer_in.push_back(buffer_in_tmp);
-            fpga.buffer_out.push_back(buffer_out_tmp);
-        
-            cl::Event tmp_write = cl::Event();
-            cl::Event tmp_kern = cl::Event();
-            cl::Event tmp_read = cl::Event();
-            fpga.write_event.push_back(tmp_write);
-            fpga.kern_event.push_back(tmp_kern);
-            //fpga.read_event.push_back(tmp_read);
-        
-            int narg = 0;
-            fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_in[ib*NUM_CU+ik]);
-            fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_out[ib*NUM_CU+ik]);
-            fpga.isFirstRun.push_back(true);
-            std::vector<cl::Event> tmp_write_vec(1);
-            std::vector<cl::Event> tmp_kern_vec(1);
-            std::vector<cl::Event> tmp_read_vec(1);
-            fpga.writeList.push_back(tmp_write_vec);
-            fpga.kernList.push_back(tmp_kern_vec);
-            fpga.readList.push_back(tmp_read_vec);
+	  cl::Buffer buffer_in_tmp    (context,CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,   vector_size_in_bytes, fpga.source_in.data());
+	  cl::Buffer buffer_out_tmp(context,CL_MEM_USE_HOST_PTR | CL_MEM_WRITE_ONLY, vector_size_out_bytes, fpga.source_hw_results.data());
+	  fpga.buffer_in.push_back(buffer_in_tmp);
+	  fpga.buffer_out.push_back(buffer_out_tmp);
+	  
+	  cl::Event tmp_write = cl::Event();
+	  cl::Event tmp_kern = cl::Event();
+	  cl::Event tmp_read = cl::Event();
+	  fpga.write_event.push_back(tmp_write);
+	  fpga.kern_event.push_back(tmp_kern);
+	  //fpga.read_event.push_back(tmp_read);
+
+	  int narg = 0;
+	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_in[ib*NUM_CU+ik]);
+	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_wvec_in[0]);
+	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_wvec_in[1]);
+	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_wvec_in[2]);
+	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_wvec_in[3]);
+	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_wvec_in[4]);
+	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_wvec_in[5]);
+
+	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_out[ib*NUM_CU+ik]);
+	  fpga.isFirstRun.push_back(true);
+	  std::vector<cl::Event> tmp_write_vec(1);
+	  std::vector<cl::Event> tmp_kern_vec(1);
+	  std::vector<cl::Event> tmp_read_vec(1);
+	  fpga.writeList.push_back(tmp_write_vec);
+	  fpga.kernList.push_back(tmp_kern_vec);
+	  fpga.readList.push_back(tmp_read_vec);
         }
     }
-
     auto t0 = Clock::now();
     auto t1 = Clock::now();
     auto t1a = Clock::now();
     auto t1b = Clock::now();
     auto t2 = Clock::now();
     auto t3 = Clock::now();
-
+    
+    int index = 0;
     for (int ib = 0; ib < NBUFFER; ib++) {
+
         for (int i = 0 ; i < NUM_CU ; i++){
+
             for (int istream = 0; istream < STREAMSIZE; istream++) {
-            // Create the test data if no data files found or if end of files has been reached
-      	        fpga.source_in[ib*NUM_CU*STREAMSIZE+i*STREAMSIZE+istream] = (bigdata_t)(12354.37674*(istream+STREAMSIZE*(ib+i+1)));
+                for (int ij = 0; ij < BIGSTREAMSIZE_IN; ij++) {
+		  // Create the test data if no data files found or if end of files has been reached
+		  fpga.source_in[ib*NUM_CU*STREAMSIZE*BIGSTREAMSIZE_IN+i*STREAMSIZE*BIGSTREAMSIZE_IN+istream*BIGSTREAMSIZE_IN+ij] = (bigdata_t)(12354.37674*(ij+istream*BIGSTREAMSIZE_IN+STREAMSIZE*BIGSTREAMSIZE_IN*(ib+i+1)));
+		  //fpga.source_in[ib*NUM_CU*STREAMSIZE*BIGSTREAMSIZE_IN+i*STREAMSIZE*BIGSTREAMSIZE_IN+istream*BIGSTREAMSIZE_IN+ij] = 12345678-12345684*istream;//(bigdata_t)(ij*32);
+		  //fpga.source_in[index] = (bigdata_t) index;
+		  
+		  bigdata_t tmp = 0;
+		  for(int i0 = 0; i0 < COMPRESSION; i0++) {
+		    data_t inTmpL = (data_t) 100;//index;
+		    tmp.range((i0+1)*16-1,(i0)*16) = inTmpL.range(15,0);
+		  } 
+		  fpga.source_in[index] = tmp;
+		  index++;
+                }
             }
         }
     }
@@ -468,26 +500,10 @@ int main(int argc, char** argv)
     print_nanoseconds("      begin:  ",ts0, 0);
 
     fpga.ithr = 0;
-    std::thread th0(FPGA, std::ref(fpga));
-    std::thread th1(FPGA, std::ref(fpga));
-    std::thread th2(FPGA, std::ref(fpga));
-    std::thread th3(FPGA, std::ref(fpga));
-    std::thread th4(FPGA, std::ref(fpga));
-    std::thread th5(FPGA, std::ref(fpga));
-    std::thread th6(FPGA, std::ref(fpga));
-    std::thread th7(FPGA, std::ref(fpga));
-    th0.join();
-    th1.join();
-    th2.join();
-    th3.join();
-    th4.join();
-    th5.join();
-    th6.join();
-    th7.join();
-    //FPGA(std::ref(fpga));
+
+    FPGA(std::ref(fpga));
     auto ts4 = SClock::now();
     print_nanoseconds("       done:  ",ts4, 0);
-
     for (int i = 0 ; i < NUM_CU ; i++){
         OCL_CHECK(fpga.err, fpga.err = fpga.q[i].flush());
         OCL_CHECK(fpga.err, fpga.err = fpga.q[i].finish());
@@ -496,6 +512,27 @@ int main(int argc, char** argv)
     auto ts5 = SClock::now();
     print_nanoseconds("       end:   ",ts5, 0);
     std::cout << fpga.ss.str();
+    for (int ib = 0; ib < NBUFFER; ib++) {
+        for (int i = 0 ; i < NUM_CU ; i++){
+            for (int istream = 0; istream < STREAMSIZE; istream++) {
+                std::cout<<"STREAM - "<<istream<<"\n\t";
+                for (int ij = 0; ij < BIGSTREAMSIZE_OUT; ij++) {
+                // Create the test data if no data files found or if end of files has been reached
+
+		  bigdata_t outTmp = fpga.source_hw_results[ib*NUM_CU*STREAMSIZE*BIGSTREAMSIZE_OUT+i*STREAMSIZE*BIGSTREAMSIZE_OUT+istream*BIGSTREAMSIZE_OUT+ij];
+		  std::cout << "----> ";
+		  for(int ik = 0; ik < COMPRESSION; ik++) { 
+		    data_t outTmpL;
+		    outTmpL.range(15,0) = outTmp.range((ik+1)*16-1,(ik)*16);
+		    std::cout << outTmpL << "  ";
+		  }
+		  std::cout << std::endl;
+		  std::cout << " out num " <<outTmp << std::endl;
+                }
+                std::cout<<std::endl;
+            }
+        }
+    }
 
     return EXIT_SUCCESS;
 }

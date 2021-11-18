@@ -39,6 +39,13 @@ Description:
 #include PROJ_HDR
 #include "kernel_params.h"
 
+template<unsigned N> 
+void fillWeights(const model_default_t iWeightsIn[N], model_default_t weights[N]) { 
+  for(int i0 = 0; i0 < N; i0++) { 
+    weights[i0] = iWeightsIn[i0];
+  }
+}
+
 /*
     HLS4ML Kernel Implementation 
     Arguments:
@@ -46,8 +53,15 @@ Description:
         out   (output)    --> Output Vector
    */
 extern "C" {
+
 void alveo_hls4ml(
         const bigdata_t *in, // Read-Only Vector
+	const model_default_t *in_weights1, 
+	const model_default_t *in_weights2, 
+	const model_default_t *in_weights3,
+	const model_default_t *in_weights4,
+	const model_default_t *in_weights5,
+        const model_default_t *in_weights6,
         bigdata_t *out       // Output Result
         )
 {
@@ -60,54 +74,103 @@ void alveo_hls4ml(
 // Multiple interfaces can also be created based on the requirements. For example when multiple memory accessing arguments need access to
 // global memory simultaneously, user can create multiple master interfaces and can connect to different arguments.
 #pragma HLS INTERFACE m_axi port=in  offset=slave bundle=gmem
+#pragma HLS INTERFACE m_axi port=in_weights1  offset=slave bundle=gmem
+#pragma HLS INTERFACE m_axi port=in_weights2  offset=slave bundle=gmem
+#pragma HLS INTERFACE m_axi port=in_weights3  offset=slave bundle=gmem
+#pragma HLS INTERFACE m_axi port=in_weights4  offset=slave bundle=gmem
+#pragma HLS INTERFACE m_axi port=in_weights5  offset=slave bundle=gmem
+#pragma HLS INTERFACE m_axi port=in_weights6  offset=slave bundle=gmem
 #pragma HLS INTERFACE m_axi port=out offset=slave bundle=gmem
 #pragma HLS INTERFACE s_axilite port=in   bundle=control
+#pragma HLS INTERFACE s_axilite port=in_weights1   bundle=control
+#pragma HLS INTERFACE s_axilite port=in_weights2   bundle=control
+#pragma HLS INTERFACE s_axilite port=in_weights3   bundle=control
+#pragma HLS INTERFACE s_axilite port=in_weights4   bundle=control
+#pragma HLS INTERFACE s_axilite port=in_weights5   bundle=control
+#pragma HLS INTERFACE s_axilite port=in_weights6   bundle=control
 #pragma HLS INTERFACE s_axilite port=out  bundle=control
 #pragma HLS INTERFACE s_axilite port=return bundle=control
-    #pragma HLS DATAFLOW
     //necessary for hls4ml kernel, not used
+    #pragma HLS DATAFLOW
 
-    bigdata_t in_bigbuf[STREAMSIZE];
-    bigdata_t out_bigbuf[COMPSTREAMSIZE];
-    
-    input_t in_buf[STREAMSIZE][DATA_SIZE_IN];
-    layer11_t out_buf[STREAMSIZE][DATA_SIZE_OUT];
-    //these will get partitioned properly in the hls4ml code
 
-    #pragma HLS ARRAY_RESHAPE   variable=in_buf  complete dim=2
-    #pragma HLS ARRAY_RESHAPE   variable=out_buf complete dim=2
+    static model_default_t w27[NW1];
+    static model_default_t w31[NW2];
+    static model_default_t w36[NW3];
+    static model_default_t w40[NW4];
+    static model_default_t w44[NW5];
+    static model_default_t w48[NW6];
+    #pragma HLS RESOURCE variable=w27  core=XPM_MEMORY uram
+    #pragma HLS RESOURCE variable=w31  core=XPM_MEMORY uram
+    #pragma HLS RESOURCE variable=w36  core=XPM_MEMORY uram
+    #pragma HLS RESOURCE variable=w40  core=XPM_MEMORY uram
+    #pragma HLS RESOURCE variable=w44  core=XPM_MEMORY uram
+    #pragma HLS RESOURCE variable=w48  core=XPM_MEMORY uram
+    static bool fillWeights_ = false;
 
-    //getting data from DDR
-    for (int i = 0; i < STREAMSIZE; i++) {
-      in_bigbuf[i] = in[i];
-    }
-    for (int i = 0; i < STREAMSIZE; i++) {
-      #pragma HLS PIPELINE
-      for(int i0 = 0; i0 < DATA_SIZE_IN; i0++) { 
-         #pragma HLS UNROLL
-	 in_buf[i][i0].range(15,0) = in_bigbuf[i].range(16*(i0+1)-1,16*i0);
+    if(!fillWeights_) { 
+      fillWeights<NW1>(in_weights1,w27);
+      fillWeights<NW2>(in_weights2,w31);
+      fillWeights<NW3>(in_weights3,w36);
+      fillWeights<NW4>(in_weights4,w40);
+      fillWeights<NW5>(in_weights5,w44);
+      fillWeights<NW6>(in_weights6,w48);
+      fillWeights_ = true;
+    } else {
+
+      bigdata_t in_bigbuf[BIGSTREAMSIZE_IN*STREAMSIZE];
+      bigdata_t out_bigbuf[BIGSTREAMSIZE_OUT*STREAMSIZE];
+      
+      hls::stream<input_t> in_buf[STREAMSIZE][DATA_SIZE_IN+1];
+      hls::stream<result_t> out_buf[STREAMSIZE][DATA_SIZE_OUT];
+      //these will get partitioned properly in the hls4ml code
+  
+      #pragma HLS ARRAY_PARTITION   variable=in_buf  complete dim=0
+      #pragma HLS ARRAY_PARTITION   variable=out_buf complete dim=0
+      #pragma HLS STREAM   variable=in_buf  depth=1000
+      #pragma HLS STREAM   variable=out_buf depth=1
+  
+      //getting data from DDR
+      for (int i = 0; i < STREAMSIZE*BIGSTREAMSIZE_IN; i++) {
+        #pragma HLS LOOP UNROLL
+        in_bigbuf[i] = in[i];
+      }
+      for (int i = 0; i < STREAMSIZE; i++) {
+        std::cout<<"------------------"<<std::endl;
+        for(int i0 = 0; i0 < IN_STREAM_LEN; i0++) { 
+	  for(int i1 = 0; i1 < DATA_SIZE_IN; i1++) { 
+	    #pragma HLS UNROLL
+	    int ib = (i0*DATA_SIZE_IN+i1)%COMPRESSION;
+	    int ia = i*BIGSTREAMSIZE_IN+( (i0*DATA_SIZE_IN+i1)/COMPRESSION);
+	    input_t tmp;
+	    tmp.range(15,0) = in_bigbuf[ia].range(16*(ib+1)-1,16*ib);
+	    int chan = ( (i0*DATA_SIZE_IN+i1) % DATA_SIZE_IN)+1;
+	    if (chan == 1) in_buf[i][0].write((input_t)(i0 == 0 ? 0 : 1));
+	    in_buf[i][chan].write(tmp);
+	    std::cout<<"writing to ["<<i<<"]["<<chan<<"]"<<std::endl;
+	  }
+	}
+        std::cout<<"inf start"<<std::endl;
+        hls4ml: MYPROJ(in_buf[i],out_buf[i],w27,w31,w36,w40,w44,w48);
+	std::cout<<"inf end"<<std::endl;
+        bigdata_t tmp;
+        for(int i0 = 0; i0 < OUT_STREAM_LEN; i0++) { 
+         for(int i1 = 0; i1 < DATA_SIZE_OUT; i1++) {
+	  #pragma HLS UNROLL
+          int ib = (i0*DATA_SIZE_OUT+i1)%COMPRESSION;
+          int ia = i*BIGSTREAMSIZE_OUT+((i0*DATA_SIZE_OUT+i1)/COMPRESSION);
+          std::cout<<"reading from ["<<i<<"]["<<i1<<"]"<<std::endl;
+          result_t tmp_small = out_buf[i][i1].read();
+          tmp((ib+1)*16-1,(ib)*16) = tmp_small.range(15,0);
+          if (((i0*DATA_SIZE_OUT+i1)%COMPRESSION == COMPRESSION-1) || (i0 == OUT_STREAM_LEN-1 && i1 == DATA_SIZE_OUT-1)) out_bigbuf[ia] = tmp;
+         }
+        }
+      }
+      //place output into DDR
+      for (int i = 0; i < STREAMSIZE*BIGSTREAMSIZE_OUT; i++) {
+        #pragma HLS LOOP UNROLL
+        out[i] = out_bigbuf[i];
       }
     }
-    //run inference
-    for (int i = 0; i < STREAMSIZE; i++) {
-      #pragma HLS DATAFLOW
-      hls4ml: MYPROJ(in_buf[i],out_buf[i]);
-    }
-    for (int i = 0; i < COMPSTREAMSIZE; i++) {
-      #pragma HLS PIPELINE
-      bigdata_t tmp;
-      for(int i1 = 0; i1 < COMPRESSION;i1++) { 
-       for(int i0 = 0; i0 < DATA_SIZE_OUT; i0++) { 
-        #pragma HLS UNROLL
-	tmp((i1+1)*16-1,(i1)*16) = out_buf[i*COMPRESSION+i1][i0].range(15,0);
-       }
-      }
-      out_bigbuf[i] = tmp;
-    }
-    //place output into DDR
-    for (int i = 0; i < COMPSTREAMSIZE; i++) {
-     out[i] = out_bigbuf[i];
-    }
-  }
 }
-
+}
