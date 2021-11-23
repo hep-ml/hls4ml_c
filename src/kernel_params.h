@@ -3,7 +3,7 @@
 
 //how many consecutive sets of inputs to run over per kernel execution
 #define COMPRESSION 32
-#define STREAMSIZE 1
+#define STREAMSIZE 5
 #define BIGSTREAMSIZE_IN  77
 #define BIGSTREAMSIZE_OUT 1
 

@@ -147,7 +147,7 @@ struct config4_relu : nnet::activ_config {
 struct config4_mult : nnet::dense_config {
     static const unsigned n_in = 100;
     static const unsigned n_out = 16;
-    static const unsigned reuse_factor = 10;
+    static const unsigned reuse_factor = 5;
     static const unsigned merge_factor = 1;
     typedef ap_fixed<16,6> accum_t;
     typedef model_default_t bias_t;
@@ -214,7 +214,7 @@ struct config9_relu : nnet::activ_config {
 struct config9_mult : nnet::dense_config {
     static const unsigned n_in = 144;
     static const unsigned n_out = 32;
-    static const unsigned reuse_factor = 48;
+    static const unsigned reuse_factor = 24;
     static const unsigned merge_factor = 1;
     typedef ap_fixed<16,6> accum_t;
     typedef model_default_t bias_t;
@@ -258,7 +258,7 @@ struct config13_relu : nnet::activ_config {
 struct config13_mult : nnet::dense_config {
     static const unsigned n_in = 288;
     static const unsigned n_out = 32;
-    static const unsigned reuse_factor = 48;
+    static const unsigned reuse_factor = 24;
     static const unsigned merge_factor = 1;
     typedef ap_fixed<16,6> accum_t;
     typedef model_default_t bias_t;
@@ -325,7 +325,7 @@ struct config18_relu : nnet::activ_config {
 struct config18_mult : nnet::dense_config {
     static const unsigned n_in = 288;
     static const unsigned n_out = 64;
-    static const unsigned reuse_factor = 288;
+    static const unsigned reuse_factor = 96;
     static const unsigned merge_factor = 1;
     typedef ap_fixed<16,6> accum_t;
     typedef model_default_t bias_t;
@@ -369,7 +369,7 @@ struct config22_relu : nnet::activ_config {
 struct config22_mult : nnet::dense_config {
     static const unsigned n_in = 576;
     static const unsigned n_out = 64;
-    static const unsigned reuse_factor = 288;
+    static const unsigned reuse_factor = 96;
     static const unsigned merge_factor = 1;
     typedef ap_fixed<16,6> accum_t;
     typedef model_default_t bias_t;
@@ -436,7 +436,7 @@ struct config27_relu : nnet::activ_config {
 struct config27_mult : nnet::dense_config {
     static const unsigned n_in = 576;
     static const unsigned n_out = 128;
-    static const unsigned reuse_factor = 576;
+    static const unsigned reuse_factor = 288;
     static const unsigned merge_factor = 1;
     typedef ap_fixed<16,6> accum_t;
     typedef model_default_t bias_t;
@@ -480,7 +480,7 @@ struct config31_relu : nnet::activ_config {
 struct config31_mult : nnet::dense_config {
     static const unsigned n_in = 1152;
     static const unsigned n_out = 128;
-    static const unsigned reuse_factor = 1152;
+    static const unsigned reuse_factor = 288;
     static const unsigned merge_factor = 1;
     typedef ap_fixed<16,6> accum_t;
     typedef model_default_t bias_t;
@@ -591,7 +591,7 @@ struct config40_relu : nnet::activ_config {
 struct config40_mult : nnet::dense_config {
     static const unsigned n_in = 2304;
     static const unsigned n_out = 256;
-    static const unsigned reuse_factor = 2304;
+    static const unsigned reuse_factor = 1152;
     static const unsigned merge_factor = 1;
     typedef ap_fixed<16,6> accum_t;
     typedef model_default_t bias_t;

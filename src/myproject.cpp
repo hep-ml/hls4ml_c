@@ -132,7 +132,7 @@ void myproject(
   #pragma HLS STREAM variable=layer7_out depth=3080 dim=1
   for(int i0 = 0; i0 < (56+4)*(55+4)*nevent; i0++) {    
     //#pragma HLS PIPELINE 
-    #pragma HLS PIPELINE II=10
+    #pragma HLS PIPELINE II=5
     nnet::conv_2d_large_cl_nopad_pad<layer3_t, layer7_t, config4>(layer6_out, layer7_out, w4, b4);
   }
 

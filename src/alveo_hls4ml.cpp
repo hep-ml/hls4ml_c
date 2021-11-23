@@ -100,8 +100,8 @@ void alveo_hls4ml(
     static model_default_t w40[NW4];
     static model_default_t w44[NW5];
     static model_default_t w48[NW6];
-    #pragma HLS RESOURCE variable=w27  core=XPM_MEMORY uram
-    #pragma HLS RESOURCE variable=w31  core=XPM_MEMORY uram
+    //#pragma HLS RESOURCE variable=w27  core=XPM_MEMORY uram
+    //#pragma HLS RESOURCE variable=w31  core=XPM_MEMORY uram
     #pragma HLS RESOURCE variable=w36  core=XPM_MEMORY uram
     #pragma HLS RESOURCE variable=w40  core=XPM_MEMORY uram
     #pragma HLS RESOURCE variable=w44  core=XPM_MEMORY uram
