@@ -20,24 +20,19 @@
 #ifndef MYPROJECT_H_
 #define MYPROJECT_H_
 
-#include <complex>
 #include "ap_int.h"
 #include "ap_fixed.h"
+#include "hls_stream.h"
 
-#include "parameters.h"
+#include "defines.h"
 
 
 // Prototype of top level function for C-synthesis
 void myproject(
-	       hls::stream<input_t>   em_barrel[N_INPUT_3_1],
-	       //hls::stream<result_t>  layer54_out[N_FILT_18],
-	       hls::stream<result_t>  layer54_out[N_LAYER_52],
-	       model_weightdefault_t w27[73728],
-	       model_weightdefault_t w31[147456],
-	       model_weightdefault_t w36[294912],
-	       model_weightdefault_t w40[589824],
-	       model_weightdefault_t w44[589824],
-	       model_weightdefault_t w48[65536]
-	       );
+    hls::stream<input_t> &q_conv2d_input,
+    hls::stream<result_t> &layer15_out,
+    unsigned short &const_size_in_1,
+    unsigned short &const_size_out_1
+);
 
 #endif

@@ -21,6 +21,7 @@
 #define NNET_MERGE_H_
 
 #include "nnet_common.h"
+#include "nnet_dense.h"
 #include "hls_stream.h"
 #include <math.h>
 
@@ -31,16 +32,11 @@ struct merge_config
     static const unsigned n_elem = 10;
 };
 
-struct split_config
-{
-  static const unsigned n_elem = 10;
-};
-
-struct mux_config
-{
-  static const unsigned n_elem_full = 10;
-  static const unsigned n_elem = 10;
-  static const unsigned mux    = 1;
+struct dot_config {
+    static const unsigned n_in = 10;
+    static const unsigned n_out = 1;
+    static const unsigned reuse_factor = 1;
+    typedef float accum_t;
 };
 
 struct concat_config {
@@ -56,154 +52,15 @@ struct concat_config {
 
 template<class input1_T, class input2_T, class res_T, typename CONFIG_T>
 void add(
-    input1_T data1[CONFIG_T::n_filt],
-    input2_T data2[CONFIG_T::n_filt],
-    res_T res[CONFIG_T::n_elem])
-{
-    for (int ii=0; ii<CONFIG_T::n_filt; ii++) {
-      #pragma HLS UNROLL
-      res[ii] = data1[ii] + data2[ii];
-    }
-}
-
-
-template<class input1_T, class input2_T, class res_T, typename CONFIG_T>
-void addrelu_old(
     input1_T data1[CONFIG_T::n_elem],
-    input2_T data2[CONFIG_T::n_elem],
+	input2_T data2[CONFIG_T::n_elem],
     res_T res[CONFIG_T::n_elem])
 {
     for (int ii=0; ii<CONFIG_T::n_elem; ii++) {
-      #pragma HLS UNROLL
-      res[ii] = data1[ii] + data2[ii];
-      if(res[ii] < 0) res[ii] = 0; 
+        res[ii] = data1[ii] + data2[ii];
     }
 }
 
-template<class input_T, class res_T, typename CONFIG_T>
-void split(
-	 hls::stream<input_T>  data[CONFIG_T::n_elem],
-	 hls::stream<res_T>    res1[CONFIG_T::n_elem],
-	 hls::stream<res_T>    res2[CONFIG_T::n_elem])
-{
-    for (int ii=0; ii<CONFIG_T::n_elem; ii++) {
-      #pragma HLS UNROLL
-      input_T pData = data[ii].read();
-      res1[ii].write(pData);
-      res2[ii].write(pData);
-    }
-}
-
-
-template<class input_T, class res_T, typename CONFIG_T>
-void mux(
-	 hls::stream<input_T>  data[CONFIG_T::n_elem_full],
-	 hls::stream<res_T>    res [CONFIG_T::n_elem])
-{
-  static const int factor=CONFIG_T::n_elem;
-  for (int jj=0; jj<CONFIG_T::n_mux; jj++) {
-    for (int ii=0; ii<factor; ii++) {
-      #pragma HLS UNROLL
-      input_T pData = data[1+factor*jj+ii].read();
-      res[ii].write(pData);
-    }
-  }
-}
-
-
-template<class input_T, class res_T, typename CONFIG_T>
-void demux(
-	 hls::stream<input_T>  data[CONFIG_T::n_elem],
-	 hls::stream<res_T>    res [CONFIG_T::n_elem_full])
-{
-  static const int factor=CONFIG_T::n_elem;
-  for (int jj=0; jj<CONFIG_T::n_mux; jj++) {
-    for (int ii=0; ii<factor; ii++) {
-      #pragma HLS UNROLL
-      input_T pData = data[ii].read();
-      res[1+factor*jj+ii].write(pData);
-    }
-  }
-}
-
-template<class input_T, class res_T, typename CONFIG_T>
-void split_mux(
-	 hls::stream<input_T>  data[CONFIG_T::n_elem_full],
-	 hls::stream<res_T>    res1[CONFIG_T::n_elem_full],
-	 hls::stream<res_T>    res2[CONFIG_T::n_elem_full])
-{
-  hls::stream<input_T>  tmpdata[CONFIG_T::n_elem];
-  #pragma HLS STREAM variable=tmpdata depth=CONFIG_T::n_mux dim=1
-
-  hls::stream<input_T>  tmpres1[CONFIG_T::n_elem];
-  #pragma HLS STREAM variable=tmpres1 depth=CONFIG_T::n_mux dim=1
-
-  hls::stream<input_T>  tmpres2[CONFIG_T::n_elem];
-  #pragma HLS STREAM variable=tmpres2 depth=CONFIG_T::n_mux dim=1
-
-  res_T pTmp = (res_T) data[0].read();
-  mux<input_T,res_T,CONFIG_T>(data,tmpdata);
-  for(unsigned i0 = 0; i0 < CONFIG_T::n_mux; i0++) { 
-	split<input_T,res_T,CONFIG_T>(tmpdata,tmpres1,tmpres2);
-  }
-  res1[0].write(pTmp);
-  res2[0].write(pTmp);
-  demux<input_T,res_T,CONFIG_T>(tmpres1,res1);
-  demux<input_T,res_T,CONFIG_T>(tmpres2,res2);
-}
-
-template<class input_T, class res_T, typename CONFIG_T>
-void add(
-	 hls::stream<input_T> data1[CONFIG_T::n_elem],
-	 hls::stream<input_T> data2[CONFIG_T::n_elem],
-	 hls::stream<res_T>   res  [CONFIG_T::n_elem])
-{
-    for (int ii=0; ii<CONFIG_T::n_elem; ii++) {
-      #pragma HLS UNROLL
-      res_T pData = data1[ii].read()+data2[ii].read();
-      res[ii].write(pData);
-    }
-}
-
-template<class input1_T, class input2_T, class res_T, typename CONFIG_T>
-void addrelu(
-	 hls::stream<input1_T> data1[CONFIG_T::n_elem],
-	 hls::stream<input2_T> data2[CONFIG_T::n_elem],
-	 hls::stream<res_T>    res  [CONFIG_T::n_elem])
-{
-    for (int ii=0; ii<CONFIG_T::n_elem; ii++) {
-      #pragma HLS UNROLL
-      res_T pData = data1[ii].read()+data2[ii].read();
-      if(pData < 0) pData = 0;
-      res[ii].write(pData);
-    }
-}
-
- template<class input1_T, class input2_T, class res_T, typename CONFIG_T>
-void addrelu_mux(
-	 hls::stream<input1_T> data1[CONFIG_T::n_elem_full],
-	 hls::stream<input2_T> data2[CONFIG_T::n_elem_full],
-	 hls::stream<res_T>    res  [CONFIG_T::n_elem_full])
-{
-  hls::stream<input1_T>  tmpdata1[CONFIG_T::n_elem];
-  #pragma HLS STREAM variable=tmpdata1 depth=CONFIG_T::n_mux dim=1
-
-  hls::stream<input2_T>  tmpdata2[CONFIG_T::n_elem];
-  #pragma HLS STREAM variable=tmpdata2 depth=CONFIG_T::n_mux dim=1
-
-  hls::stream<res_T>  tmpres[CONFIG_T::n_elem];
-  #pragma HLS STREAM variable=tmpres depth=CONFIG_T::n_mux dim=1
-  
-  res_T pTmp1 = (res_T) data1[0].read();
-  res_T pTmp2 = (res_T) data2[0].read();
-  mux<input1_T,input1_T,CONFIG_T>(data1,tmpdata1);
-  mux<input2_T,input2_T,CONFIG_T>(data2,tmpdata2);
-  for(unsigned i0 = 0; i0 < CONFIG_T::n_mux; i0++) { 
-    addrelu<input1_T,input2_T,res_T,CONFIG_T>(tmpdata1,tmpdata2,tmpres);
-  }
-  res[0].write(pTmp1);
-  demux<res_T,res_T,CONFIG_T>(tmpres,res);
-}
 
 template<class input1_T, class input2_T, class res_T, typename CONFIG_T>
 void subtract(
@@ -261,8 +118,40 @@ void minimum(
 }
 
 template<class input1_T, class input2_T, class res_T, typename CONFIG_T>
+void dot1d(
+    input1_T data1[CONFIG_T::n_in],
+	input2_T data2[CONFIG_T::n_in],
+    res_T res[CONFIG_T::n_out])
+{
+    #pragma HLS PIPELINE II=CONFIG_T::reuse_factor
+
+    constexpr unsigned multiplier_limit = DIV_ROUNDUP(CONFIG_T::n_in, CONFIG_T::reuse_factor);
+    #pragma HLS ALLOCATION instances=product limit=multiplier_limit function
+
+    typename CONFIG_T::accum_t mult[CONFIG_T::n_in];
+    #pragma HLS ARRAY_PARTITION variable=mult complete
+    typename CONFIG_T::accum_t acc = 0;
+
+    Product: for(int i_mult=0; i_mult < CONFIG_T::n_in; i_mult++) {
+        #pragma HLS UNROLL
+        mult[i_mult] = product<input1_T, input2_T, typename CONFIG_T::accum_t>(data1[i_mult], data2[i_mult]);
+    }
+
+    Accum: for(int i_acc = 0; i_acc < CONFIG_T::n_in; i_acc++) {
+        #pragma HLS UNROLL
+        acc += mult[i_acc];
+    }
+
+    Result: for(int i_res = 0; i_res < CONFIG_T::n_out; i_res++) {
+        #pragma HLS_UNROLL
+        res[i_res] = cast<input1_T, res_T, CONFIG_T>(acc);
+    }
+}
+
+
+template<class input1_T, class input2_T, class res_T, typename CONFIG_T>
 void concatenate1d(
-    input1_T data1[CONFIG_T::n_elem1_0], 
+    input1_T data1[CONFIG_T::n_elem1_0],
 	input2_T data2[CONFIG_T::n_elem2_0],
     res_T res[CONFIG_T::n_elem1_0 + CONFIG_T::n_elem2_0])
 {
@@ -276,7 +165,7 @@ void concatenate1d(
 
 template<class input1_T, class input2_T, class res_T, typename CONFIG_T>
 void concatenate2d_0(
-    input1_T data1[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1], 
+    input1_T data1[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1],
 	input2_T data2[CONFIG_T::n_elem2_0 * CONFIG_T::n_elem2_1],
     res_T res[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1 + CONFIG_T::n_elem2_0 * CONFIG_T::n_elem2_1])
 {
@@ -290,7 +179,7 @@ void concatenate2d_0(
 
 template<class input1_T, class input2_T, class res_T, typename CONFIG_T>
 void concatenate2d_1(
-    input1_T data1[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1], 
+    input1_T data1[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1],
 	input2_T data2[CONFIG_T::n_elem2_0 * CONFIG_T::n_elem2_1],
     res_T res[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1 + CONFIG_T::n_elem2_0 * CONFIG_T::n_elem2_1])
 {
@@ -306,7 +195,7 @@ void concatenate2d_1(
 
 template<class input1_T, class input2_T, class res_T, typename CONFIG_T>
 void concatenate2d(
-    input1_T data1[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1], 
+    input1_T data1[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1],
 	input2_T data2[CONFIG_T::n_elem2_0 * CONFIG_T::n_elem2_1],
     res_T res[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1 + CONFIG_T::n_elem2_0 * CONFIG_T::n_elem2_1])
 {
@@ -333,7 +222,7 @@ input1_T data1[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1 * CONFIG_T::n_elem1_2],
 
 template<class input1_T, class input2_T, class res_T, typename CONFIG_T>
 void concatenate3d_1(
-input1_T data1[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1 * CONFIG_T::n_elem1_2], 
+input1_T data1[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1 * CONFIG_T::n_elem1_2],
 	input2_T data2[CONFIG_T::n_elem2_0 * CONFIG_T::n_elem2_1 * CONFIG_T::n_elem2_2],
     res_T res[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1 * CONFIG_T::n_elem1_2 + CONFIG_T::n_elem2_0 * CONFIG_T::n_elem2_1 * CONFIG_T::n_elem2_2])
 {
@@ -365,7 +254,7 @@ input1_T data1[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1 * CONFIG_T::n_elem1_2],
 
 template<class input1_T, class input2_T, class res_T, typename CONFIG_T>
 void concatenate3d_2(
-input1_T data1[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1 * CONFIG_T::n_elem1_2], 
+input1_T data1[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1 * CONFIG_T::n_elem1_2],
 	input2_T data2[CONFIG_T::n_elem2_0 * CONFIG_T::n_elem2_1 * CONFIG_T::n_elem2_2],
     res_T res[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1 * CONFIG_T::n_elem1_2 + CONFIG_T::n_elem2_0 * CONFIG_T::n_elem2_1 * CONFIG_T::n_elem2_2])
 {
@@ -396,9 +285,9 @@ input1_T data1[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1 * CONFIG_T::n_elem1_2],
 
 template<class input1_T, class input2_T, class res_T, typename CONFIG_T>
 void concatenate3d(
-    input1_T data1[CONFIG_T::n_elem1[0] * CONFIG_T::n_elem1_1 * CONFIG_T::n_elem1_2], 
-	input2_T data2[CONFIG_T::n_elem2[0] * CONFIG_T::n_elem2_1 * CONFIG_T::n_elem2_2],
-    res_T res[CONFIG_T::n_elem1[0] * CONFIG_T::n_elem1_1 * CONFIG_T::n_elem1_2 + CONFIG_T::n_elem2[0] * CONFIG_T::n_elem2_1 * CONFIG_T::n_elem2_2])
+    input1_T data1[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1 * CONFIG_T::n_elem1_2],
+	input2_T data2[CONFIG_T::n_elem2_0 * CONFIG_T::n_elem2_1 * CONFIG_T::n_elem2_2],
+    res_T res[CONFIG_T::n_elem1_0 * CONFIG_T::n_elem1_1 * CONFIG_T::n_elem1_2 + CONFIG_T::n_elem2_0 * CONFIG_T::n_elem2_1 * CONFIG_T::n_elem2_2])
 {
     if (CONFIG_T::axis == 2 || CONFIG_T::axis == -1) {
         concatenate3d_2<input1_T, input2_T, res_T, CONFIG_T>(data1, data2, res);

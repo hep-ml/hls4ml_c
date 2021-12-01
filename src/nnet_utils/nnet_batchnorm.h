@@ -21,6 +21,7 @@
 #define NNET_BATCHNORM_H_
 
 #include "nnet_common.h"
+#include "nnet_dense.h"
 #include "hls_stream.h"
 #include <math.h>
 
@@ -42,6 +43,8 @@ struct batchnorm_config
     static const bool store_weights_in_bram = false;
     static const unsigned n_zeros = 0;
     // partitioning arrays cyclically to go with roll factors?
+    template<class x_T, class y_T, class res_T>
+    using product = nnet::product::mult<x_T, y_T, res_T>;
 };
 
 template<class data_T, class res_T, typename CONFIG_T>
@@ -84,81 +87,14 @@ void normalize(
         }
         
         if (CONFIG_T::n_filt==-1) {
-            res[ires] = data[ires] * scale[ires] + bias[ires];
+            res[ires] = CONFIG_T::template product<data_T, typename CONFIG_T::scale_t, res_T>::product(data[ires], scale[ires]) + bias[ires];
 	    } else {
             int norm_index = ires%CONFIG_T::n_filt;
-            res[ires] = data[ires] * scale[norm_index] + bias[norm_index];
+            res[ires] = CONFIG_T::template product<data_T, typename CONFIG_T::scale_t, res_T>::product(data[ires], scale[norm_index]) + bias[norm_index];
         }
 	}
 }
 
-template<class data_T, class res_T, typename CONFIG_T>
-void normalize2(
-    data_T    data[CONFIG_T::n_in],
-    res_T     res[CONFIG_T::n_in],
-    typename CONFIG_T::scale_t  scale[CONFIG_T::n_in],
-    typename CONFIG_T::bias_t   bias[CONFIG_T::n_in] ) {
-   
-    // Use a function_instantiate in case it helps to explicitly optimize unchanging weights/biases
-    //#pragma HLS function_instantiate variable=scale,bias
-    #pragma HLS ARRAY_RESHAPE variable=scale complete
-    #pragma HLS ARRAY_RESHAPE variable=bias complete
-
-    const int rufactor = 1;//CONFIG_T::reuse_factor;
-    const int multfactor = CONFIG_T::n_in;//MIN(CONFIG_T::n_in,CONFIG_T::reuse_factor);
-
-    // Calcuate result
-    //for (int ir = 0; ir < rufactor; ir++) {
-    int ir = 0; 
-        for (int ires = 0; ires < multfactor; ires++) {
-            #pragma HLS UNROLL
-            res[ires*rufactor+ir] = data[ires*rufactor+ir] * scale[ires*rufactor+ir] + bias[ires*rufactor+ir];
-        }
-	  //}
-}
-
-template<class data_T, class res_T, typename CONFIG_T>
-void normalize_stream(
-    hls::stream<data_T>    data[CONFIG_T::n_in],
-    hls::stream<res_T>     res[CONFIG_T::n_in],
-    typename CONFIG_T::scale_t  scale[CONFIG_T::n_in],
-    typename CONFIG_T::bias_t   bias[CONFIG_T::n_in] ) {
-   
-    #pragma HLS PIPELINE
-    #pragma HLS function_instantiate variable=scale,bias
-    #pragma HLS ARRAY_RESHAPE variable=scale complete
-    #pragma HLS ARRAY_RESHAPE variable=bias complete
-
-    for (int ires = 0; ires < CONFIG_T::n_in; ires++) {
-     #pragma HLS UNROLL
-     res_T pTmp = (res_T) data[ires].read();
-     if(ires > 0) { 
-      pTmp = pTmp*scale[ires-1] + bias[ires-1];
-     }
-     res[ires].write(pTmp);
-    }
-}
-template<class data_T, class res_T, typename CONFIG_T>
-void normalize_stream_ss(
-    hls::stream<data_T>    &data,
-    hls::stream<res_T>     &res,
-    typename CONFIG_T::scale_t  scale[CONFIG_T::n_in],
-    typename CONFIG_T::bias_t   bias[CONFIG_T::n_in] ) {
-   
-    #pragma HLS PIPELINE
-    #pragma HLS function_instantiate variable=scale,bias
-    #pragma HLS ARRAY_RESHAPE variable=scale complete
-    #pragma HLS ARRAY_RESHAPE variable=bias complete
-  
-    for (int ires = 0; ires < CONFIG_T::n_in; ires++) {
-     #pragma HLS UNROLL
-     data_T pTmp = data.read();
-     if(ires > 0) { 
-      pTmp = pTmp*scale[ires-1] + bias[ires-1];
-     }
-     res.write(pTmp);
-    }
-}
 // ****************************************************
 //       Merged Batch Normalization and Quantized Tanh
 // ****************************************************
@@ -189,7 +125,8 @@ void  normalize_binary_tanh(data_T data[CONFIG_T::n_in], ap_uint<1> res[CONFIG_T
             #pragma HLS PIPELINE
         }
         datareg = data[ii];	 
-        if( datareg > threshold[ii] ) cache = 1;
+        int norm_index = CONFIG_T::n_filt==-1 ? ii : ii%CONFIG_T::n_filt;
+        if( datareg > threshold[norm_index] ) cache = 1;
         else cache = 0;
 
         res[ii] = (ap_uint<1>) cache;
@@ -212,12 +149,13 @@ void  normalize_ternary_tanh(data_T data[CONFIG_T::n_in], ap_int<2> res[CONFIG_T
             #pragma HLS PIPELINE
         }
         datareg = data[ii];
-        if( datareg > threshold_hi[ii] ) cache = 1;
-        else if( datareg <= threshold_lo[ii]) cache = -1;
+        int norm_index = CONFIG_T::n_filt==-1 ? ii : ii%CONFIG_T::n_filt;
+        if( datareg > threshold_hi[norm_index] ) cache = 1;
+        else if( datareg <= threshold_lo[norm_index]) cache = -1;
         else cache = 0;
 
         res[ii] = (ap_int<2>) cache;
- 
+
     }
 }
 

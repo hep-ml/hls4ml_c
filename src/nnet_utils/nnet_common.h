@@ -25,33 +25,83 @@
 // This is a substitute for "ceil(n/(float)d)".
 #define DIV_ROUNDUP(n,d) ((n + d - 1) / d)
 #define MIN(n,d) (n > d ? d : n)
-#define MAX(n,d) (n > d ? n : d)
-#define SUB(n,d) (n > d ? (n-d) : 0)
-#define MAXZERO(n) (n > 0 ? n : 0)
 
 namespace nnet {
 
 // Common type definitions
-enum io_type {io_parallel = 0, io_serial};
+enum io_type {io_parallel = 0, io_serial, io_stream};
+enum strategy { latency, resource };
 
-// Default data types (??) TODO: Deprecate
-typedef ap_fixed<16,4>  weight_t_def;
-typedef ap_fixed<16,4>  bias_t_def;
-typedef ap_fixed<32,10> accum_t_def;
-
- template<class data_T, int NIN1, int NIN2>
-   void merge(
-	      data_T data1[NIN1], 
-	      data_T data2[NIN2],
-	      data_T res[NIN1+NIN2])
- {
-   for(int ii=0; ii<NIN1; ii++){
-     res[ii] = data1[ii];
-   }
-   for(int ii=0; ii<NIN2; ii++){
-     res[NIN1+ii] = data2[ii];
-   }
+ /* ---
+  * Balanced tree reduce implementation.
+  * For use in scenarios where Vivado cannot expression balance
+  * Reduces an array of inputs to a single value using the template binary operator 'Op',
+  * for example summing all elements with Op_add, or finding the maximum with Op_max
+  * Use only when the input array is fully unrolled. Or, slice out a fully unrolled section
+  * before applying and accumulate the result over the rolled dimension.
+  * --- */
+ template<class T, int N, class Op>
+ T reduce(T* x, Op op){
+	static constexpr int leftN = pow2(floorlog2(N - 1)) > 0 ? pow2(floorlog2(N - 1)) : 0;
+	static constexpr int rightN = N - leftN > 0 ? N - leftN : 0;
+	if(N == 1){
+		return x[0];
+	}else if(N == 2){
+		return op(x[0],x[1]);
+	}else{
+		T left[leftN];
+		T right[rightN];
+		#pragma HLS array_partition variable=left complete
+		#pragma HLS array_partition variable=right complete
+		ReduceLeft: for(int i = 0; i < leftN; i++){
+			left[i] = x[i];
+		}
+		ReduceRight: for(int i = 0; i < rightN; i++){
+			right[i] = x[i+leftN];
+		}
+		return op(reduce<T,leftN,Op>(left, op), reduce<T,rightN,Op>(right, op));
+	}
  }
+
+ template<class T>
+ class Op_add{
+ public:
+	 T operator()(T a, T b){
+		 return a + b;
+	 }
+ };
+
+ template<class T>
+ class Op_and{
+ public:
+	 T operator()(T a, T b){
+		 return a && b;
+	 }
+ };
+
+ template<class T>
+ class Op_or{
+ public:
+	 T operator()(T a, T b){
+		 return a || b;
+	 }
+ };
+
+ template<class T>
+ class Op_max{
+ public:
+     T operator()(T a, T b){
+        return a >= b ? a : b;
+     }
+ };
+
+ template<class T>
+ class Op_min{
+ public:
+     T operator()(T a, T b){
+        return a <= b ? a : b;
+     }
+ };
 
 }
 
