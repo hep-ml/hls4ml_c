@@ -334,10 +334,12 @@ int main(int argc, char** argv)
     fpga.ikern = 0;
     fpga.source_in.reserve(STREAMSIZE*BIGSTREAMSIZE_IN*NUM_CU*NBUFFER);
     fpga.source_hw_results.reserve(STREAMSIZE*BIGSTREAMSIZE_OUT*NUM_CU*NBUFFER);
-    //fpga.source_w8_in.reserve(NW1);
-    //fpga.source_w10_in.reserve(NW2);
-    fpga.source_w40_in.reserve(NW3);
-    fpga.source_w44_in.reserve(NW4);
+    fpga.source_w27_in.reserve(NW1);
+    fpga.source_w31_in.reserve(NW2);
+    fpga.source_w36_in.reserve(NW3);
+    fpga.source_w40_in.reserve(NW4);
+    fpga.source_w44_in.reserve(NW5);
+    fpga.source_w48_in.reserve(NW6);
 
     //initialize
     for(int j = 0 ; j < STREAMSIZE*BIGSTREAMSIZE_IN*NUM_CU*NBUFFER ; j++){
