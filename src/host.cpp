@@ -43,13 +43,6 @@ typedef std::chrono::system_clock SClock;
 #include <vector>
 #include "kernel_params.h"
 
-#include "weights/w27.h"
-#include "weights/w31.h"
-#include "weights/w36.h"
-#include "weights/w40.h"
-#include "weights/w44.h"
-#include "weights/w48.h"
-
 #include <thread>
 #include <sstream>
 
@@ -186,12 +179,6 @@ class fpgaObj {
     int ikern;
     std::vector<bigdata_t,aligned_allocator<bigdata_t>> source_in;
     std::vector<bigdata_t,aligned_allocator<bigdata_t>> source_hw_results;
-    std::vector<model_default_t,aligned_allocator<model_default_t>> source_w27_in;
-    std::vector<model_default_t,aligned_allocator<model_default_t>> source_w31_in;
-    std::vector<model_default_t,aligned_allocator<model_default_t>> source_w36_in;
-    std::vector<model_default_t,aligned_allocator<model_default_t>> source_w40_in;
-    std::vector<model_default_t,aligned_allocator<model_default_t>> source_w44_in;
-    std::vector<model_default_t,aligned_allocator<model_default_t>> source_w48_in;
     cl::Program program;
     std::vector<cl::CommandQueue> q;
     std::vector<cl::Kernel> krnl_xil;
@@ -323,21 +310,11 @@ int main(int argc, char** argv)
 
     size_t vector_size_in_bytes = sizeof(bigdata_t) * STREAMSIZE * BIGSTREAMSIZE_IN;
     size_t vector_size_out_bytes = sizeof(bigdata_t) * STREAMSIZE * BIGSTREAMSIZE_OUT;
-    size_t vector_size_in_w27_bytes = sizeof(model_default_t) * NW1;
-    size_t vector_size_in_w31_bytes = sizeof(model_default_t) * NW2;
-    size_t vector_size_in_w36_bytes = sizeof(model_default_t) * NW3;
-    size_t vector_size_in_w40_bytes = sizeof(model_default_t) * NW4;
-    size_t vector_size_in_w44_bytes = sizeof(model_default_t) * NW5;
-    size_t vector_size_in_w48_bytes = sizeof(model_default_t) * NW6;
     fpgaObj fpga;
     fpga.nevents = nevents;
     fpga.ikern = 0;
     fpga.source_in.reserve(STREAMSIZE*BIGSTREAMSIZE_IN*NUM_CU*NBUFFER);
     fpga.source_hw_results.reserve(STREAMSIZE*BIGSTREAMSIZE_OUT*NUM_CU*NBUFFER);
-    //fpga.source_w8_in.reserve(NW1);
-    //fpga.source_w10_in.reserve(NW2);
-    fpga.source_w40_in.reserve(NW3);
-    fpga.source_w44_in.reserve(NW4);
 
     //initialize
     for(int j = 0 ; j < STREAMSIZE*BIGSTREAMSIZE_IN*NUM_CU*NBUFFER ; j++){
@@ -347,24 +324,6 @@ int main(int argc, char** argv)
     for(int j = 0 ; j < STREAMSIZE*BIGSTREAMSIZE_OUT*NUM_CU*NBUFFER ; j++){
       data_t in=(data_t) j;
       fpga.source_hw_results[j] = in;
-    }
-    for(int j = 0; j < NW1; j++){
-      fpga.source_w27_in[j] = w27[j];
-    }
-    for(int j = 0; j < NW2; j++){
-      fpga.source_w31_in[j] = w31[j];
-    }
-    for(int j = 0; j < NW3; j++){
-      fpga.source_w36_in[j] = w36[j];
-    }
-    for(int j = 0; j < NW4; j++){
-      fpga.source_w40_in[j] = w40[j];
-    }
-    for(int j = 0; j < NW5; j++){
-      fpga.source_w44_in[j] = w44[j];
-    }
-    for(int j = 0; j < NW6; j++){
-      fpga.source_w48_in[j] = w48[j];
     }
 
     // OPENCL HOST CODE AREA START
@@ -416,19 +375,6 @@ int main(int argc, char** argv)
     // Buffers are allocated using CL_MEM_USE_HOST_PTR for efficient memory and 
     // Device-to-host communication
 
-    cl::Buffer buffer_in_w27_tmp    (context,CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,   vector_size_in_w27_bytes, fpga.source_w27_in.data());
-    cl::Buffer buffer_in_w31_tmp    (context,CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,   vector_size_in_w31_bytes, fpga.source_w31_in.data());
-    cl::Buffer buffer_in_w36_tmp    (context,CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,   vector_size_in_w36_bytes, fpga.source_w36_in.data());
-    cl::Buffer buffer_in_w40_tmp    (context,CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,   vector_size_in_w40_bytes, fpga.source_w40_in.data());
-    cl::Buffer buffer_in_w44_tmp    (context,CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,   vector_size_in_w44_bytes, fpga.source_w44_in.data());
-    cl::Buffer buffer_in_w48_tmp    (context,CL_MEM_USE_HOST_PTR | CL_MEM_READ_ONLY,   vector_size_in_w48_bytes, fpga.source_w48_in.data());
-    fpga.buffer_wvec_in.push_back(buffer_in_w27_tmp);
-    fpga.buffer_wvec_in.push_back(buffer_in_w31_tmp);
-    fpga.buffer_wvec_in.push_back(buffer_in_w36_tmp);
-    fpga.buffer_wvec_in.push_back(buffer_in_w40_tmp);
-    fpga.buffer_wvec_in.push_back(buffer_in_w44_tmp);
-    fpga.buffer_wvec_in.push_back(buffer_in_w48_tmp);
-    
     fpga.writeList.reserve(NUM_CU*NBUFFER);
     fpga.kernList.reserve(NUM_CU*NBUFFER);
     fpga.readList.reserve(NUM_CU*NBUFFER);
@@ -448,12 +394,6 @@ int main(int argc, char** argv)
 
 	  int narg = 0;
 	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_in[ib*NUM_CU+ik]);
-	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_wvec_in[0]);
-	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_wvec_in[1]);
-	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_wvec_in[2]);
-	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_wvec_in[3]);
-	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_wvec_in[4]);
-	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_wvec_in[5]);
 
 	  fpga.krnl_xil[ib*NUM_CU+ik].setArg(narg++, fpga.buffer_out[ib*NUM_CU+ik]);
 	  fpga.isFirstRun.push_back(true);

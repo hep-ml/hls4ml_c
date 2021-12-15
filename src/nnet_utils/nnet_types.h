@@ -13,11 +13,11 @@ struct array {
 
     T data[N];
 
-    T& operator[](size_t pos) {
+    T& operator[](unsigned short pos) {
         return data[pos];
     }
     
-    const T& operator[](size_t pos) const {
+    const T& operator[](unsigned short pos) const {
         return data[pos];
     }
 

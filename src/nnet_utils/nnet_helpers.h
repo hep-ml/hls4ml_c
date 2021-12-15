@@ -36,7 +36,7 @@ namespace nnet {
 #define WEIGHTS_DIR "weights"
 #endif
 
-template<class T, size_t SIZE>
+template<class T, unsigned short SIZE>
 void load_weights_from_txt(T *w, const char* fname) {
 
     std::string full_path = std::string(WEIGHTS_DIR) + "/" + std::string(fname);
@@ -52,7 +52,7 @@ void load_weights_from_txt(T *w, const char* fname) {
         std::istringstream iss(line);
         std::string token;
 
-        size_t i = 0;
+        unsigned short i = 0;
         while(std::getline(iss, token, ',')) {
             std::istringstream(token) >> w[i];
             i++;
@@ -65,7 +65,7 @@ void load_weights_from_txt(T *w, const char* fname) {
     }
 }
 
-template<class T, size_t SIZE>
+template<class T, unsigned short SIZE>
 void load_compressed_weights_from_txt(T *w, const char* fname) {
 
     std::string full_path = std::string(WEIGHTS_DIR) + "/" + std::string(fname);
@@ -82,7 +82,7 @@ void load_compressed_weights_from_txt(T *w, const char* fname) {
         std::string token;
         std::string extra_chars = "} ";
 
-        size_t i = 0;
+        unsigned short i = 0;
         while(std::getline(iss, token, '{')) {
             if (token.length() == 0) {
                 continue;
@@ -111,7 +111,7 @@ void load_compressed_weights_from_txt(T *w, const char* fname) {
     }
 }
 
-template<class T, size_t SIZE>
+template<class T, unsigned short SIZE>
 void load_exponent_weights_from_txt(T *w, const char* fname) {
 
     std::string full_path = std::string(WEIGHTS_DIR) + "/" + std::string(fname);
@@ -128,7 +128,7 @@ void load_exponent_weights_from_txt(T *w, const char* fname) {
         std::string token;
         std::string extra_chars = "} ";
 
-        size_t i = 0;
+        unsigned short i = 0;
         while(std::getline(iss, token, '{')) {
             if (token.length() == 0) {
                 continue;
@@ -156,29 +156,29 @@ void load_exponent_weights_from_txt(T *w, const char* fname) {
         }
     }
 }
-template<class srcType, class dstType, size_t SIZE>
+template<class srcType, class dstType, unsigned short SIZE>
 void convert_data(srcType *src, dstType *dst) {
-    for (size_t i = 0; i < SIZE; i++) {
+    for (unsigned short i = 0; i < SIZE; i++) {
         dst[i] = dstType(src[i]);
     }
 }
 
-template<class srcType, class dstType, size_t SIZE>
+template<class srcType, class dstType, unsigned short SIZE>
 void convert_data(srcType *src, hls::stream<dstType> &dst) {
-    for (size_t i = 0; i < SIZE / dstType::size; i++) {
+    for (unsigned short i = 0; i < SIZE / dstType::size; i++) {
         dstType ctype;
-        for (size_t j = 0; j < dstType::size; j++) {
+        for (unsigned short j = 0; j < dstType::size; j++) {
             ctype[j] = typename dstType::value_type(src[i * dstType::size + j]);
         }
         dst.write(ctype);
     }
 }
 
-template<class srcType, class dstType, size_t SIZE>
+template<class srcType, class dstType, unsigned short SIZE>
 void convert_data(hls::stream<srcType> &src, dstType *dst) {
-    for (size_t i = 0; i < SIZE / srcType::size; i++) {
+    for (unsigned short i = 0; i < SIZE / srcType::size; i++) {
         srcType ctype = src.read();
-        for (size_t j = 0; j < srcType::size; j++) {
+        for (unsigned short j = 0; j < srcType::size; j++) {
             dst[i * srcType::size + j] = dstType(ctype[j]);
         }
     }
@@ -186,20 +186,20 @@ void convert_data(hls::stream<srcType> &src, dstType *dst) {
 
 extern bool trace_enabled;
 extern std::map<std::string, void *> *trace_outputs;
-extern size_t trace_type_size;
+extern unsigned short trace_type_size;
 
 template<class data_T, class save_T>
-void save_output_array(data_T *data, save_T *ptr, size_t layer_size) {
+void save_output_array(data_T *data, save_T *ptr, unsigned short layer_size) {
     for(int i = 0; i < layer_size; i++) {
         ptr[i] = save_T(data[i]);
     }
 }
 
 template<class data_T, class save_T>
-void save_output_array(hls::stream<data_T> &data, save_T *ptr, size_t layer_size) {
-    for (size_t i = 0; i < layer_size / data_T::size; i++) {
+void save_output_array(hls::stream<data_T> &data, save_T *ptr, unsigned short layer_size) {
+    for (unsigned short i = 0; i < layer_size / data_T::size; i++) {
         data_T ctype = data.read();
-        for (size_t j = 0; j < data_T::size; j++) {
+        for (unsigned short j = 0; j < data_T::size; j++) {
             ptr[i * data_T::size + j] = save_T(ctype[j]);
         }
         data.write(ctype);
@@ -209,7 +209,7 @@ void save_output_array(hls::stream<data_T> &data, save_T *ptr, size_t layer_size
 // We don't want to include save_T in this function because it will be inserted into myproject.cpp
 // so a workaround with element size is used
 template<class data_T>
-void save_layer_output(data_T *data, const char *layer_name, size_t layer_size) {
+void save_layer_output(data_T *data, const char *layer_name, unsigned short layer_size) {
     if (!trace_enabled) return;
     
     if (trace_outputs) {
@@ -219,10 +219,10 @@ void save_layer_output(data_T *data, const char *layer_name, size_t layer_size) 
             } else if (trace_type_size == 8) {
                 save_output_array<data_T, double>(data, (double *) (*trace_outputs)[layer_name], layer_size);
             } else {
-                std::cout << "Unknown trace type!" << std::endl;
+                //std::cout << "Unknown trace type!" << std::endl;
             }
         } else {
-            std::cout << "Layer name: " << layer_name << " not found in debug storage!" << std::endl;
+            //std::cout << "Layer name: " << layer_name << " not found in debug storage!" << std::endl;
         }
     } else {
         std::ostringstream filename;
@@ -239,7 +239,7 @@ void save_layer_output(data_T *data, const char *layer_name, size_t layer_size) 
 }
 
 template<class data_T>
-void save_layer_output(hls::stream<data_T> &data, const char *layer_name, size_t layer_size) {
+void save_layer_output(hls::stream<data_T> &data, const char *layer_name, unsigned short layer_size) {
     if (!trace_enabled) return;
     
     if (trace_outputs) {
@@ -249,10 +249,10 @@ void save_layer_output(hls::stream<data_T> &data, const char *layer_name, size_t
             } else if (trace_type_size == 8) {
                 save_output_array<data_T, double>(data, (double *) (*trace_outputs)[layer_name], layer_size);
             } else {
-                std::cout << "Unknown trace type!" << std::endl;
+                //std::cout << "Unknown trace type!" << std::endl;
             }
         } else {
-            std::cout << "Layer name: " << layer_name << " not found in debug storage!" << std::endl;
+            //std::cout << "Layer name: " << layer_name << " not found in debug storage!" << std::endl;
         }
     } else {
         std::ostringstream filename;
@@ -260,9 +260,9 @@ void save_layer_output(hls::stream<data_T> &data, const char *layer_name, size_t
         std::fstream out;
         out.open(filename.str(), std::ios::app);
         assert(out.is_open());
-        for (size_t i = 0; i < layer_size / data_T::size; i++) {
+        for (unsigned short i = 0; i < layer_size / data_T::size; i++) {
             data_T ctype = data.read();
-            for (size_t j = 0; j < data_T::size; j++) {
+            for (unsigned short j = 0; j < data_T::size; j++) {
                 out << float(ctype[j]) << " "; // We don't care about precision in text files
             }
             data.write(ctype);
@@ -275,19 +275,19 @@ void save_layer_output(hls::stream<data_T> &data, const char *layer_name, size_t
 
 #endif
 
-template<class src_T, class dst_T, size_t OFFSET, size_t SIZE>
+template<class src_T, class dst_T, unsigned short OFFSET, unsigned short SIZE>
 void copy_data(std::vector<src_T> src, dst_T dst[SIZE]) {
     typename std::vector<src_T>::const_iterator in_begin = src.cbegin() + OFFSET;
     typename std::vector<src_T>::const_iterator in_end = in_begin + SIZE;
     std::copy(in_begin, in_end, dst);
 }
 
-template<class src_T, class dst_T, size_t OFFSET, size_t SIZE>
+template<class src_T, class dst_T, unsigned short OFFSET, unsigned short SIZE>
 void copy_data(std::vector<src_T> src, hls::stream<dst_T> &dst) {
     typename std::vector<src_T>::const_iterator in_begin = src.cbegin() + OFFSET;
     typename std::vector<src_T>::const_iterator in_end = in_begin + SIZE;
 
-    size_t i_pack = 0;
+    unsigned short i_pack = 0;
     dst_T dst_pack;
     for (typename std::vector<src_T>::const_iterator i = in_begin; i != in_end; ++i) {
         dst_pack[i_pack++] = typename dst_T::value_type(*i);
@@ -298,7 +298,7 @@ void copy_data(std::vector<src_T> src, hls::stream<dst_T> &dst) {
     }
 }
 
-template<class res_T, size_t SIZE>
+template<class res_T, unsigned short SIZE>
 void print_result(res_T result[SIZE], std::ostream &out, bool keep = false) {
     for(int i = 0; i < SIZE; i++) {
         out << result[i] << " ";
@@ -306,7 +306,7 @@ void print_result(res_T result[SIZE], std::ostream &out, bool keep = false) {
     out << std::endl;
 }
 
-template<class res_T, size_t SIZE>
+template<class res_T, unsigned short SIZE>
 void print_result(hls::stream<res_T> &result, std::ostream &out, bool keep = false) {
     for(int i = 0; i < SIZE / res_T::size; i++) {
         res_T res_pack = result.read();
@@ -318,12 +318,12 @@ void print_result(hls::stream<res_T> &result, std::ostream &out, bool keep = fal
     out << std::endl;
 }
 
-template<class data_T, size_t SIZE>
+template<class data_T, unsigned short SIZE>
 void fill_zero(data_T data[SIZE]) {
     std::fill_n(data, SIZE, 0.);
 }
 
-template<class data_T, size_t SIZE>
+template<class data_T, unsigned short SIZE>
 void fill_zero(hls::stream<data_T> &data) {
     for(int i = 0; i < SIZE / data_T::size; i++) {
         data_T data_pack;
@@ -394,7 +394,7 @@ void  hls_stream_debug(hls::stream<data_T> &data, hls::stream<data_T> &res)
     data_T datareg;
     for (int ii=0; ii<N_IN; ii++) {
         datareg = data.read();
-        std::cout << "[" << ii << "]: " << datareg << std::endl;
+        //std::cout << "[" << ii << "]: " << datareg << std::endl;
         res << datareg;
     }
 }
