@@ -103,15 +103,20 @@ void alveo_hls4ml(
 	    int ib = (i0*DATA_SIZE_IN+i1)%COMPRESSION;
 	    int ia = i*BIGSTREAMSIZE_IN+( (i0*DATA_SIZE_IN+i1)/COMPRESSION);
 	    input_t tmp;
-	    tmp.range(15,0) = in_bigbuf[ia].range(16*(ib+1)-1,16*ib);
+	    tmp[0].range(15,0) = in_bigbuf[ia].range(16*(ib+1)-1,16*ib);
 	    int chan = ( (i0*DATA_SIZE_IN+i1) % DATA_SIZE_IN)+1;
-	    if (chan == 1) in_buf[i][0].write((input_t)(i0 == 0 ? 0 : 1));
+            input_t write_value;
+            if (i0 == 0)
+                    write_value[0] =  0;
+            else
+                    write_value[0] = 1;
+	    if (chan == 1) (in_buf[i][0]).write(write_value);
 	    in_buf[i][chan].write(tmp);
 	    std::cout<<"writing to ["<<i<<"]["<<chan<<"]"<<std::endl;
 	  }
 	}
       std::cout<<"inf start"<<std::endl;
-      hls4ml: MYPROJ(in_buf[i],out_buf[i],const_size_in_1, const_size_out_1);
+      hls4ml: MYPROJ(*in_buf[i],*out_buf[i],const_size_in_1, const_size_out_1);
 	std::cout<<"inf end"<<std::endl;
       bigdata_t tmp;
       for(int i0 = 0; i0 < OUT_STREAM_LEN; i0++) { 
@@ -120,8 +125,9 @@ void alveo_hls4ml(
         int ib = (i0*DATA_SIZE_OUT+i1)%COMPRESSION;
         int ia = i*BIGSTREAMSIZE_OUT+((i0*DATA_SIZE_OUT+i1)/COMPRESSION);
         std::cout<<"reading from ["<<i<<"]["<<i1<<"]"<<std::endl;
-        result_t tmp_small = out_buf[i][i1].read();
-        tmp((ib+1)*16-1,(ib)*16) = tmp_small.range(15,0);
+        result_t tmp_small;
+        tmp_small = out_buf[i][i1].read();
+        tmp((ib+1)*16-1,(ib)*16) = tmp_small[0].range(15,0);
         if (((i0*DATA_SIZE_OUT+i1)%COMPRESSION == COMPRESSION-1) || (i0 == OUT_STREAM_LEN-1 && i1 == DATA_SIZE_OUT-1)) out_bigbuf[ia] = tmp;
        }
       }
